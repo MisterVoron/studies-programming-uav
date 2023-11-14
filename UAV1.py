@@ -1,7 +1,0 @@
-import smbus2
-
-
-
-
-
-
