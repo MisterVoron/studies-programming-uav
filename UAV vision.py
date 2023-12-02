@@ -1,7 +1,7 @@
 import cv2
 
 
-img = cv2.imread('many-cats-various-breeds-colors-looking-expectantly-camera-created-with-generative-ai_124507-172417.jpg')
+img = cv2.imread('cats.jpg')
 gray_img = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
 blur_gray_img = cv2.GaussianBlur(gray_img, (5, 5), 0)
 contrast_img = cv2.threshold(blur_gray_img, 60, 255, cv2.THRESH_BINARY)[1]
