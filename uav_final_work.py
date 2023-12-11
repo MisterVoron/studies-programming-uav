@@ -1,10 +1,18 @@
 import asyncio
 import csv
+import mlrose
+import cv2
+import matplotlib
+from matplotlib import pyplot as plt
 from mavsdk import System
 from mavsdk.offboard import PositionNedYaw, VelocityNedYaw
 from mavsdk.offboard import AccelerationNed, OffboardError
 from mavsdk.telemetry import LandedState
-import cv2
+import numpy as np
+import six
+import sys
+sys.modules['sklearn.externals.six'] = six
+matplotlib.use("TkAgg")
 
 
 class Kopter:
@@ -115,6 +123,7 @@ class Kopter:
 key_point = [42, 42]
 
 print(Kopter.__doc__)
+
 # создаем экземпляр коптера
 my_kopter = Kopter(x=0, y=0)
 
@@ -123,6 +132,7 @@ my_kopter.takeoff()
 
 # читаем маршрут
 waypoints = []
+points = []
 
 with open("data.csv", newline="") as csvfile:
     reader = csv.DictReader(csvfile)
@@ -137,37 +147,51 @@ with open("data.csv", newline="") as csvfile:
                           float(row["ax"]),
                           float(row["ay"]),
                           float(row["az"]),
+                          float(row["yaw"]),
                           int(row["mode"])))
 
-# летим по маршруту
-for point in waypoints:
-    if point[1] == key_point[0] and point[2] == key_point[1]:
-        pass
-        # съемака ключевой точки
-        img = cv2.imread('cars.jpg')
+        points.append((float(row["px"]), float(row["py"])))
 
+# оптимизируем маршрут
+# фитнесс-функция оптимизации
+fitness_func = mlrose.TravellingSales(coords=points)
+# Проблема: минимизация/максимизация
+problem = mlrose.TSPOpt(length=len(points), fitness_fn=fitness_func, maximize=False)
+
+# запуск генетического алгоритма для решения задачи
+best_path, best_lenght = mlrose.genetic_alg(problem=problem, random_state=3)
+
+print(best_path, best_lenght)
+best_path = list(best_path) * 2
+best_path = best_path[best_path.index(0)+1:best_path.index(0)+len(points)+1]
+
+# летим по маршруту
+for point in best_path:
+    if waypoints[point][1] == key_point[0] and waypoints[point][2] == key_point[1]:
+        # съемака ключевой точки
+        img = cv2.imread("cars3.jpg")
         # обработка изображения
         img_color = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        xml_data = cv2.CascadeClassifier("cars.xml")
-        detecting = xml_data.detectMultiScale(img_color, minSize=(70, 70), scaleFactor=1.03333)
-        detect = len(detecting)
 
+        xml_data = cv2.CascadeClassifier("cars.xml")
+        detecting = xml_data.detectMultiScale(img_color, minSize=(70, 70), scaleFactor=1.05)
+        detect = len(detecting)
         if detect != 0:
-            for (a, b, width, height) in detecting:
-                cv2.rectangle(img_color, (a, b), (a + height, b + width), (0, 255, 0), 5)
+            for (a, b, widht, height) in detecting:
+                cv2.rectangle(img_color, (a, b), (a + height, b + widht), (0, 255, 0), 3)
 
         cv2.imshow('avto', img_color)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
     # летим дальше
-    my_kopter.go2xy(x=point[1],
-                    y=point[2],
-                    h=point[3],
-                    yaw=point[10],
-                    vx=point[4],
-                    vy=point[5],
-                    vz=point[6])
+    my_kopter.go2xy(x=waypoints[point][1],
+                    y=waypoints[point][2],
+                    h=waypoints[point][3],
+                    yaw=waypoints[point][10],
+                    vx=waypoints[point][4],
+                    vy=waypoints[point][5],
+                    vz=waypoints[point][6])
 
 # посадка
 my_kopter.land()
